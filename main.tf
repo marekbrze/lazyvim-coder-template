@@ -51,10 +51,17 @@ resource "coder_agent" "main" {
 
     # Install Neovim 0.12+ (apt often has old version, use GitHub release)
     echo "Installing Neovim 0.12+..."
-    wget -q https://github.com/neovim/neovim/releases/latest/download/nvim-linux64.tar.gz -O /tmp/nvim.tar.gz
-    sudo rm -rf /opt/nvim-linux64
+    ARCH=$(uname -m)
+    case "$ARCH" in
+      x86_64|amd64) NVIM_ASSET="nvim-linux-x86_64.tar.gz" ;;
+      aarch64|arm64) NVIM_ASSET="nvim-linux-arm64.tar.gz" ;;
+      *) echo "ERROR: Unsupported architecture for Neovim: $ARCH"; exit 1 ;;
+    esac
+    wget --tries=3 --show-progress "https://github.com/neovim/neovim/releases/latest/download/${NVIM_ASSET}" -O /tmp/nvim.tar.gz
+    sudo rm -rf /opt/nvim-linux*
     sudo tar -xzf /tmp/nvim.tar.gz -C /opt/
-    sudo ln -sf /opt/nvim-linux64/bin/nvim /usr/local/bin/nvim
+    NVIM_DIR=$(ls -d /opt/nvim-linux-* | head -n1)
+    sudo ln -sf "${NVIM_DIR}/bin/nvim" /usr/local/bin/nvim
     rm /tmp/nvim.tar.gz
     nvim --version | head -n1
 
