@@ -85,6 +85,13 @@ resource "coder_agent" "main" {
     echo "Installing GPG packages for mise..."
     sudo apt install -y --no-install-recommends gnupg gpg-agent dirmngr >/dev/null 2>&1 || true
 
+    # Install LazyVim dependencies
+    echo "Installing LazyVim dependencies (lazygit, ripgrep, fd, python)..."
+    sudo apt update && sudo apt install -y lazygit ripgrep fd-find python3 python3-pip python3-venv >/dev/null 2>&1 || true
+    # Create fd symlink (Ubuntu uses fd-find)
+    mkdir -p ~/.local/bin
+    ln -sf /usr/bin/fdfind ~/.local/bin/fd 2>/dev/null || true
+
     # Install Node.js and Go via mise
     echo "Installing Node.js and Go via mise..."
     ~/.local/bin/mise use -g node@lts
@@ -117,8 +124,10 @@ resource "coder_agent" "main" {
     echo ""
     echo "=========================================="
     echo "✓ mise installed"
+    echo "✓ Neovim 0.12+ installed"
     echo "✓ LazyVim with Go + TypeScript extras configured"
     echo "✓ GitHub CLI installed"
+    echo "✓ LazyVim dependencies (lazygit, ripgrep, fd, python)"
     echo "✓ Node.js and Go installed via mise"
     echo "✓ Language servers installed (gopls, tsserver)"
     echo "✓ Terraform debugging helper ready"
