@@ -21,13 +21,13 @@ jobs:
 
       - name: Create template tarball
         run: |
-          tar -czf lazyvim-coder-template-${{ steps.version.outputs.version }}.tar.gz \
+          tar -cf lazyvim-coder-template-${{ steps.version.outputs.version }}.tar \
             main.tf \
             README.md \
             .mise.toml
 
       - name: Generate checksums
-        run: sha256sum lazyvim-coder-template-${{ steps.version.outputs.version }}.tar.gz > checksums.txt
+        run: sha256sum lazyvim-coder-template-${{ steps.version.outputs.version }}.tar > checksums.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -47,7 +47,7 @@ jobs:
             ### Installation in Coder
             1. In Coder UI, go to Templates → Add Template
             2. Select "From URL"
-            3. Enter: https://github.com/marekbrze/lazyvim-coder-template/releases/download/v${{ steps.version.outputs.version }}/lazyvim-coder-template-${{ steps.version.outputs.version }}.tar.gz
+            3. Enter: https://github.com/marekbrze/lazyvim-coder-template/releases/download/v${{ steps.version.outputs.version }}/lazyvim-coder-template-${{ steps.version.outputs.version }}.tar
             4. Click Create
 
             ### Files
@@ -60,7 +60,7 @@ jobs:
             $(cat checksums.txt)
             \`\`\`
           files: |
-            lazyvim-coder-template-${{ steps.version.outputs.version }}.tar.gz
+            lazyvim-coder-template-${{ steps.version.outputs.version }}.tar
             checksums.txt
           draft: false
           prerelease: false
