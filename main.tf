@@ -82,7 +82,7 @@ resource "coder_agent" "main" {
     # Install language servers for LazyVim
     echo "Installing language servers..."
     ~/.local/bin/mise exec -- go install golang.org/x/tools/gopls@latest
-    npm install -g typescript typescript-language-server vscode-langservers-extracted
+    ~/.local/bin/mise exec -- npm install -g typescript typescript-language-server vscode-langservers-extracted
 
     # Create terraform helper script
     echo "Installing Terraform debugging helper..."
