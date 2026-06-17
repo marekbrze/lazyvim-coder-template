@@ -70,6 +70,10 @@ resource "coder_agent" "main" {
       sudo apt update && \
       sudo apt install -y gh
 
+    # Install minimal GPG packages for mise verification
+    echo "Installing GPG packages for mise..."
+    sudo apt install -y --no-install-recommends gnupg gpg-agent dirmngr >/dev/null 2>&1 || true
+
     # Install Node.js and Go via mise
     echo "Installing Node.js and Go via mise..."
     ~/.local/bin/mise use -g node@lts
