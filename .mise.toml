@@ -1,0 +1,11 @@
+# mise configuration for Coder workspace
+# This file is referenced in the template documentation
+# Actual configuration is created during workspace startup
+
+[tools]
+node = "lts"
+go = "latest"
+
+[env]
+NODE_ENV = "development"
+GOBIN = "~/.local/bin"

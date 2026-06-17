@@ -1,0 +1,34 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfplan
+*.tfstate
+*.tfstate.*
+
+# Claude
+.claude/
+.agents/
+.claude.json
+
+# OS & Shell
+.bash_history
+.bash_logout
+.bashrc
+.cache/
+.config/
+.gitconfig
+.init_done
+.profile
+.wget-hsts
+
+# Local files
+.local/
+.npm/
+.go/
+.zai/
+.skills/
+
+# Testing
+testing/
+my-coder-template/
+skills-lock.json
