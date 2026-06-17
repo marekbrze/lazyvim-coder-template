@@ -49,6 +49,17 @@ resource "coder_agent" "main" {
     curl https://mise.jdx.dev/install.sh | sh
     export PATH="$HOME/.local/bin:$PATH"
 
+    # Install Neovim 0.12+
+    echo "Installing Neovim 0.12+..."
+    sudo apt update && sudo apt install -y neovim >/dev/null 2>&1 || {
+      echo "Installing Neovim via appimage..."
+      wget -q https://github.com/neovim/neovim/releases/latest/download/nvim-linux64.tar.gz -O /tmp/nvim.tar.gz
+      sudo tar -xzf /tmp/nvim.tar.gz -C /opt/
+      sudo ln -sf /opt/nvim-linux64/bin/nvim /usr/local/bin/nvim
+      rm /tmp/nvim.tar.gz
+    }
+    nvim --version | head -n1
+
     # Install LazyVim
     echo "Installing LazyVim..."
     git clone https://github.com/LazyVim/starter ~/.config/nvim
