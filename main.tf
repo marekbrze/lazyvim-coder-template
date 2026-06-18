@@ -12,9 +12,9 @@ terraform {
 
 provider "docker" {}
 
-# GLM Configuration Variables
+# GLM Configuration Variables (for Coding Plan)
 variable "glm_api_url" {
-  description = "GLM API URL for Claude Code (leave empty for default Anthropic API)"
+  description = "GLM API URL for Coder Coding Plan (leave empty for default)"
   type        = string
   default     = ""
 }
@@ -41,29 +41,27 @@ data "coder_workspace_owner" "me" {}
 resource "coder_agent" "main" {
   arch           = data.coder_provisioner.me.arch
   os             = "linux"
-  startup_script = <<-EOT
-    set -e
+  startup_script = <<EOF
+    echo "=== SCRIPT START ==="
+    # Create projects directory
+    echo "Creating projects directory..."
+    mkdir -p ~/projects
 
     # Install mise
     echo "Installing mise..."
-    curl https://mise.jdx.dev/install.sh | sh
+    curl -fsSL https://mise.jdx.dev/install.sh | sh || echo "mise install had issues, continuing..."
     export PATH="$HOME/.local/bin:$PATH"
 
-    # Install Neovim 0.12+ (apt often has old version, use GitHub release)
+    # Install Neovim 0.12+ (assuming x86_64 for most systems)
     echo "Installing Neovim 0.12+..."
-    ARCH=$(uname -m)
-    case "$ARCH" in
-      x86_64|amd64) NVIM_ASSET="nvim-linux-x86_64.tar.gz" ;;
-      aarch64|arm64) NVIM_ASSET="nvim-linux-arm64.tar.gz" ;;
-      *) echo "ERROR: Unsupported architecture for Neovim: $ARCH"; exit 1 ;;
-    esac
-    wget --tries=3 --show-progress "https://github.com/neovim/neovim/releases/latest/download/${NVIM_ASSET}" -O /tmp/nvim.tar.gz
-    sudo rm -rf /opt/nvim-linux*
+    echo "Downloading Neovim for x86_64..."
+    curl -fsSL "https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz" -o /tmp/nvim.tar.gz
+    echo "Extracting Neovim..."
     sudo tar -xzf /tmp/nvim.tar.gz -C /opt/
-    NVIM_DIR=$(ls -d /opt/nvim-linux-* | head -n1)
-    sudo ln -sf "${NVIM_DIR}/bin/nvim" /usr/local/bin/nvim
-    rm /tmp/nvim.tar.gz
-    nvim --version | head -n1
+    echo "Linking Neovim..."
+    sudo ln -sf /opt/nvim-linux-x86_64/bin/nvim /usr/local/bin/nvim
+    rm -f /tmp/nvim.tar.gz
+    echo "Neovim installed:"
 
     # Install LazyVim
     echo "Installing LazyVim..."
@@ -88,7 +86,7 @@ resource "coder_agent" "main" {
       (type -p git >/dev/null || sudo apt install -y git) && \
       sudo mkdir -p -m 755 /etc/apt/keyrings && \
       wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && \
-      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
+      echo "deb [arch=$$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
       sudo apt update && \
       sudo apt install -y gh
 
@@ -148,12 +146,12 @@ resource "coder_agent" "main" {
     echo "Manage versions: mise list"
     echo "GitHub CLI: gh --help"
     echo ""
-  EOT
+  EOF
 
   env = {
-    GIT_AUTHOR_NAME  = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
-    GIT_AUTHOR_EMAIL = "${data.coder_workspace_owner.me.email}"
-    GLM_API_URL      = var.glm_api_url
+    GIT_AUTHOR_NAME     = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
+    GIT_AUTHOR_EMAIL    = "${data.coder_workspace_owner.me.email}"
+    CODER_GLM_API_URL   = var.glm_api_url
   }
 
   metadata {
@@ -201,7 +199,7 @@ resource "docker_container" "workspace" {
 
   env = [
     "CODER_AGENT_TOKEN=${coder_agent.main.token}",
-    "GLM_API_URL=${var.glm_api_url}"
+    "CODER_GLM_API_URL=${var.glm_api_url}"
   ]
 
   volumes {
@@ -213,7 +211,7 @@ resource "docker_container" "workspace" {
   memory = var.container_memory
 }
 
-# Claude Code Module with GLM support
+# Claude Code Module
 module "claude-code" {
   count    = data.coder_workspace.me.start_count
   source   = "registry.coder.com/coder/claude-code/coder"
@@ -221,29 +219,9 @@ module "claude-code" {
   agent_id = coder_agent.main.id
   workdir  = "/home/coder/projects"
   model    = "sonnet"
-  mcp = jsonencode({
-    "terraform" = {
-      command = "local-exec"
-      args    = ["terraform-debug-skill"]
-    }
-  })
 
-  # GLM Configuration via post_install_script
+  # Install Terraform debugging skill
   post_install_script = <<-EOT
-    # Configure GLM API endpoint if provided
-    if [ -n "$GLM_API_URL" ]; then
-      mkdir -p ~/.claude
-      cat > ~/.claude/settings.json <<EOF
-    {
-      "$schema": "https://code.claude.com/schema/settings.json",
-      "apiBaseUrl": "$GLM_API_URL",
-      "model": "$${GLM_MODEL:-sonnet}"
-    }
-    EOF
-      echo "✓ GLM configured: $GLM_API_URL"
-    fi
-
-    # Install Terraform debugging skill
     mkdir -p ~/.claude/skills
     cat > ~/.claude/skills/terraform-debug.md <<'EOF'
     # Terraform Debugging Skill
