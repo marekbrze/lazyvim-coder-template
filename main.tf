@@ -41,117 +41,12 @@ data "coder_workspace_owner" "me" {}
 resource "coder_agent" "main" {
   arch           = data.coder_provisioner.me.arch
   os             = "linux"
-  startup_script = <<EOF
-    echo "=== SCRIPT START ==="
-    # Create projects directory
-    echo "Creating projects directory..."
-    mkdir -p ~/projects
-
-    # Install mise
-    echo "Installing mise..."
-    curl -fsSL https://mise.jdx.dev/install.sh | sh || echo "mise install had issues, continuing..."
-    export PATH="$HOME/.local/bin:$PATH"
-
-    # Install Neovim 0.12+ (assuming x86_64 for most systems)
-    echo "Installing Neovim 0.12+..."
-    echo "Downloading Neovim for x86_64..."
-    curl -fsSL "https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz" -o /tmp/nvim.tar.gz
-    echo "Extracting Neovim..."
-    sudo tar -xzf /tmp/nvim.tar.gz -C /opt/
-    echo "Linking Neovim..."
-    sudo ln -sf /opt/nvim-linux-x86_64/bin/nvim /usr/local/bin/nvim
-    rm -f /tmp/nvim.tar.gz
-    echo "Neovim installed:"
-
-    # Install LazyVim
-    echo "Installing LazyVim..."
-    rm -rf ~/.config/nvim
-    git clone https://github.com/LazyVim/starter ~/.config/nvim
-
-    # Enable Go and TypeScript extras
-    cat >> ~/.config/nvim/init.lua <<'EOF'
-    -- Enable Go and TypeScript extras
-    require("lazyvim.plugins.extras.lang.go")
-    require("lazyvim.plugins.extras.lang.typescript")
-    EOF
-
-    # Install LazyVim plugins
-    echo "Installing LazyVim plugins..."
-    nvim --headless "+Lazy! sync" +qa || true
-    nvim --headless "+TSUpdateSync" +qa || true
-
-    # Install GitHub CLI
-    echo "Installing GitHub CLI..."
-    (type -p wget >/dev/null || (sudo apt update && sudo apt-get install -y wget)) && \
-      (type -p git >/dev/null || sudo apt install -y git) && \
-      sudo mkdir -p -m 755 /etc/apt/keyrings && \
-      wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && \
-      echo "deb [arch=$$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
-      sudo apt update && \
-      sudo apt install -y gh
-
-    # Install minimal GPG packages for mise verification
-    echo "Installing GPG packages for mise..."
-    sudo apt install -y --no-install-recommends gnupg gpg-agent dirmngr >/dev/null 2>&1 || true
-
-    # Install LazyVim dependencies
-    echo "Installing LazyVim dependencies (lazygit, ripgrep, fd, python)..."
-    sudo apt update && sudo apt install -y lazygit ripgrep fd-find python3 python3-pip python3-venv >/dev/null 2>&1 || true
-    # Create fd symlink (Ubuntu uses fd-find)
-    mkdir -p ~/.local/bin
-    ln -sf /usr/bin/fdfind ~/.local/bin/fd 2>/dev/null || true
-
-    # Install Node.js and Go via mise
-    echo "Installing Node.js and Go via mise..."
-    ~/.local/bin/mise use -g node@lts
-    ~/.local/bin/mise use -g go@latest
-
-    # Install language servers for LazyVim
-    echo "Installing language servers..."
-    ~/.local/bin/mise exec -- go install golang.org/x/tools/gopls@latest
-    ~/.local/bin/mise exec -- npm install -g typescript typescript-language-server vscode-langservers-extracted
-
-    # Create terraform helper script
-    echo "Installing Terraform debugging helper..."
-    mkdir -p ~/.local/bin
-    cat > ~/.local/bin/terraform-debug <<'EOF'
-    #!/bin/bash
-    export TF_LOG=$${TF_LOG:-INFO}
-    export TF_LOG_PATH=$${TF_LOG_PATH:-/tmp/terraform-debug.log}
-    echo "Terraform debugging enabled. Level: $TF_LOG, Log: $TF_LOG_PATH"
-    terraform "$@"
-    EOF
-    chmod +x ~/.local/bin/terraform-debug
-
-    # Create mise config
-    cat > ~/.config/mise/config.toml <<'EOF'
-    [tools]
-    node = "lts"
-    go = "latest"
-    EOF
-
-    echo ""
-    echo "=========================================="
-    echo "✓ mise installed"
-    echo "✓ Neovim 0.12+ installed"
-    echo "✓ LazyVim with Go + TypeScript extras configured"
-    echo "✓ GitHub CLI installed"
-    echo "✓ LazyVim dependencies (lazygit, ripgrep, fd, python)"
-    echo "✓ Node.js and Go installed via mise"
-    echo "✓ Language servers installed (gopls, tsserver)"
-    echo "✓ Terraform debugging helper ready"
-    echo "=========================================="
-    echo ""
-    echo "Start coding with: nvim"
-    echo "Manage versions: mise list"
-    echo "GitHub CLI: gh --help"
-    echo ""
-  EOF
+  startup_script = templatefile("${path.module}/scripts/setup.tftpl", {})
 
   env = {
-    GIT_AUTHOR_NAME     = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
-    GIT_AUTHOR_EMAIL    = "${data.coder_workspace_owner.me.email}"
-    CODER_GLM_API_URL   = var.glm_api_url
+    GIT_AUTHOR_NAME   = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
+    GIT_AUTHOR_EMAIL  = "${data.coder_workspace_owner.me.email}"
+    CODER_GLM_API_URL = var.glm_api_url
   }
 
   metadata {
@@ -243,13 +138,4 @@ module "claude-code" {
 
     echo "✓ Terraform debugging skill installed"
   EOT
-}
-
-# Coder App for terminal access
-resource "coder_app" "terminal" {
-  agent_id     = coder_agent.main.id
-  display_name = "Terminal"
-  slug         = "terminal"
-  icon         = "/icon/terminal.svg"
-  url          = "https://localhost:0/?command=bash"
 }

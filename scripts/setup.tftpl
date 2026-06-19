@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export PATH="$HOME/.local/bin:$PATH"
+
+echo "=== Setup start ==="
+mkdir -p ~/projects
+
+# mise
+echo "Installing mise..."
+curl -fsSL https://mise.jdx.dev/install.sh | sh
+eval "$(/home/coder/.local/bin/mise activate bash)"
+
+# Persist mise + PATH for future shells
+grep -q 'mise activate' ~/.bashrc || cat >> ~/.bashrc <<'BASHRC'
+export PATH="$HOME/.local/bin:$PATH"
+eval "$($HOME/.local/bin/mise activate bash)"
+BASHRC
+
+# Neovim 0.12+ for Linux x86_64
+echo "Installing Neovim..."
+curl -fsSL "https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz" \
+  -o /tmp/nvim.tar.gz
+sudo tar -xzf /tmp/nvim.tar.gz -C /opt/
+sudo ln -sf /opt/nvim-linux-x86_64/bin/nvim /usr/local/bin/nvim
+rm -f /tmp/nvim.tar.gz
+
+# LazyVim starter
+echo "Installing LazyVim..."
+rm -rf ~/.config/nvim
+git clone https://github.com/LazyVim/starter ~/.config/nvim
+
+# Enable Go and TypeScript extras
+cat >> ~/.config/nvim/init.lua <<'LV'
+require("lazyvim.plugins.extras.lang.go")
+require("lazyvim.plugins.extras.lang.typescript")
+LV
+
+# LazyVim dependencies
+echo "Installing LazyVim dependencies..."
+sudo apt-get update
+sudo apt-get install -y ripgrep fd-find python3 python3-pip python3-venv gnupg gpg-agent dirmngr
+ln -sf /usr/bin/fdfind ~/.local/bin/fd
+
+# lazygit via mise (not in Ubuntu apt)
+echo "Installing lazygit via mise..."
+mise use -g lazygit@latest
+
+# GitHub CLI from official repo
+echo "Installing GitHub CLI..."
+command -v wget >/dev/null || sudo apt-get install -y wget
+sudo mkdir -p -m 755 /etc/apt/keyrings
+wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+  | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+  | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y gh
+
+# Node and Go via mise
+echo "Installing Node.js and Go via mise..."
+mise use -g node@lts
+mise use -g go@latest
+
+# Language servers
+echo "Installing language servers..."
+mise exec -- go install golang.org/x/tools/gopls@latest
+mise exec -- npm install -g typescript typescript-language-server vscode-langservers-extracted
+
+# mise config
+mkdir -p ~/.config/mise
+cat > ~/.config/mise/config.toml <<MISE
+[tools]
+node = "lts"
+go = "latest"
+lazygit = "latest"
+
+[env]
+GOBIN = "$HOME/.local/bin"
+MISE
+
+# Terraform debugging helper
+mkdir -p ~/.local/bin
+cat > ~/.local/bin/terraform-debug <<'TFD'
+#!/bin/bash
+export TF_LOG="$${TF_LOG:-INFO}"
+export TF_LOG_PATH="$${TF_LOG_PATH:-/tmp/terraform-debug.log}"
+echo "Terraform debugging enabled. Level: $TF_LOG, Log: $TF_LOG_PATH"
+terraform "$@"
+TFD
+chmod +x ~/.local/bin/terraform-debug
+
+echo ""
+echo "=========================================="
+echo "Setup complete:"
+echo "  nvim $(nvim --version | head -1)"
+echo "  mise $(mise --version | head -1)"
+echo "  lazygit, ripgrep, fd, gh"
+echo "  Node.js $(mise exec -- node --version)"
+echo "  Go $(mise exec -- go version)"
+echo "  gopls, typescript-language-server"
+echo "Start coding with: nvim"
+echo "=========================================="

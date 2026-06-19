@@ -149,7 +149,7 @@ To use a custom GLM endpoint:
 3. Settings written to `~/.claude/settings.json`
 
 ### Add More Tools via mise
-To add more tools, edit the `startup_script` in `main.tf`:
+To add more tools, edit `scripts/setup.tftpl`:
 ```bash
 ~/.local/bin/mise use -g python@latest  # Add Python
 ~/.local/bin/mise use -g rust@latest   # Add Rust
@@ -164,7 +164,7 @@ rust = "latest"
 ```
 
 ### Enable More LazyVim Extras
-Add to `init.lua` in the startup_script:
+Add to `~/.config/nvim/init.lua` block in `scripts/setup.tftpl`:
 ```lua
 require("lazyvim.plugins.extras.lang.python")
 require("lazyvim.plugins.extras.lang.rust")
