@@ -69,7 +69,7 @@ mise exec -- npm install -g typescript typescript-language-server vscode-langser
 
 # Global Claude skills (find-skills from vercel-labs)
 echo "Installing global Claude skills..."
-mise exec -- npx -y skills add https://github.com/vercel-labs/skills --skill find-skills
+mise exec -- npx -y skills add https://github.com/vercel-labs/skills --skill find-skills --agent claude-code -g -y
 
 # mise config
 mkdir -p ~/.config/mise
