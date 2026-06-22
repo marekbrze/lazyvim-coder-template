@@ -67,6 +67,10 @@ echo "Installing language servers..."
 mise exec -- go install golang.org/x/tools/gopls@latest
 mise exec -- npm install -g typescript typescript-language-server vscode-langservers-extracted
 
+# Global Claude skills (find-skills from vercel-labs)
+echo "Installing global Claude skills..."
+mise exec -- npx -y skills add https://github.com/vercel-labs/skills --skill find-skills
+
 # mise config
 mkdir -p ~/.config/mise
 cat > ~/.config/mise/config.toml <<MISE
