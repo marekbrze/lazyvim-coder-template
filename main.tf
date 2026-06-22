@@ -139,3 +139,27 @@ module "claude-code" {
     echo "✓ Terraform debugging skill installed"
   EOT
 }
+
+# code-server Module
+module "code-server" {
+  count    = data.coder_workspace.me.start_count
+  source   = "registry.coder.com/coder/code-server/coder"
+  version  = "1.4.3"
+  agent_id = coder_agent.main.id
+  folder   = "/home/coder/projects"
+  extensions = [
+    "golang.go",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "hashicorp.terraform",
+  ]
+  settings = {
+    "workbench.iconTheme"     = "vs-seti"
+    "editor.formatOnSave"     = true
+    "editor.defaultFormatter" = "esbenp.prettier-vscode"
+    "go.useLanguageServer"    = true
+    "gopls"                   = { "ui.semanticTokens" = true }
+    "[go]"                    = { "editor.defaultFormatter" = "golang.go" }
+    "[terraform]"             = { "editor.defaultFormatter" = "hashicorp.terraform" }
+  }
+}
