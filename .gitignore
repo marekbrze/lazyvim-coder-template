@@ -6,7 +6,13 @@
 *.tfstate.*
 
 # Claude
-.claude/
+# Project skills (.claude/skills/) are committed to the repo so they travel
+# with the template; everything else under .claude/ is local machine state.
+# find-skills is a symlink into .agents/ (gitignored below), so exclude it
+# to avoid committing a dangling link.
+.claude/*
+!.claude/skills/
+.claude/skills/find-skills
 .agents/
 .claude.json
 
