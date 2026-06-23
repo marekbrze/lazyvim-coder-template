@@ -1,9 +1,9 @@
 ---
 display_name: "LazyVim + mise + Claude Code"
-description: "Go & Node.js development environment with LazyVim, mise version manager, Claude Code AI (GLM-ready), and GitHub CLI"
+description: "Go & Node.js development environment with LazyVim, mise version manager, Claude Code AI (GLM-ready), GitHub CLI, and a subdomain dev-server preview"
 icon: "https://lazyvim.github.io/favicon.svg"
 verified: false
-tags: ["neovim", "lazyvim", "go", "nodejs", "mise", "claude-code", "github-cli", "glm"]
+tags: ["neovim", "lazyvim", "go", "nodejs", "mise", "claude-code", "github-cli", "glm", "preview"]
 parameters:
   - name: glm_api_url
     display_name: GLM API URL
@@ -22,6 +22,12 @@ parameters:
     description: Memory limit for the container in megabytes
     type: number
     default: 4096
+    required: false
+  - name: preview_port
+    display_name: Preview Port
+    description: Port the Astro/Go dev server listens on (surfaced as the Preview app)
+    type: number
+    default: 4321
     required: false
 ---
 
@@ -132,6 +138,41 @@ typescript-language-server --version
 # Test in nvim
 nvim main.go          # Go file with LSP
 nvim index.ts         # TypeScript file with LSP
+```
+
+## Dev Server Preview
+
+The template registers a **Preview** app (subdomain-based) that proxies to your dev server on `preview_port` (default **4321**, Astro's default — point a Go server at the same port). Start your dev server, then click **Preview** in the workspace dashboard.
+
+### Astro
+```bash
+cd ~/projects/my-astro-app
+astro dev --host            # binds 0.0.0.0:4321; --host lets HMR resolve correctly
+```
+
+### Go
+```bash
+cd ~/projects/my-go-app
+# serve on the preview port, e.g.:
+#   http.ListenAndServe(":4321", mux)
+go run .
+```
+
+### Why subdomains (not path-based)
+The Preview app uses `subdomain = true` so Vite/Astro **HMR works out of the box**. Coder's path-based proxy strips the URL prefix before forwarding, which breaks the dev server's absolute asset URLs and the HMR WebSocket. Subdomain apps hand the dev server a clean root (`base = /`), so assets, the `/@vite/client` script, and the HMR socket all resolve correctly.
+
+> Requires the Coder server to be configured with a wildcard app hostname
+> (`--wildcard-access-url`). If the Preview app is unreachable, ask your admin
+> to set this; without it, subdomain apps cannot resolve.
+
+### If HMR won't connect
+Astro usually infers the HMR target from the page URL and works automatically. If live reload fails, set the HMR host in `astro.config.mjs`:
+```js
+export default defineConfig({
+  vite: {
+    server: { hmr: { host: 'YOUR-PREVIEW-SUBDOMAIN', clientPort: 443, protocol: 'wss' } },
+  },
+});
 ```
 
 ## Requirements

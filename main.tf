@@ -32,6 +32,12 @@ variable "container_memory" {
   default     = 4096
 }
 
+variable "preview_port" {
+  description = "Port the dev server (Astro or Go) listens on; surfaced as the Preview app"
+  type        = number
+  default     = 4321
+}
+
 # Data sources
 data "coder_provisioner" "me" {}
 data "coder_workspace" "me" {}
@@ -167,5 +173,31 @@ module "code-server" {
     "gopls"                   = { "ui.semanticTokens" = true }
     "[go]"                    = { "editor.defaultFormatter" = "golang.go" }
     "[terraform]"             = { "editor.defaultFormatter" = "hashicorp.terraform" }
+  }
+}
+
+# Preview App
+# Subdomain-based so Vite/Astro HMR works out of the box. Coder's path-based
+# proxy strips the URL prefix, which breaks dev-server asset URLs and the HMR
+# WebSocket; subdomain apps hand the dev server a clean root, so HMR connects
+# with no special config. Requires the Coder server to be configured with a
+# wildcard app hostname (--wildcard-access-url).
+#
+# Run your dev server on var.preview_port (default 4321), then open this app:
+#   Astro: `astro dev --host`            (binds 0.0.0.0:4321)
+#   Go:    `go run .` / air, listening on :4321
+resource "coder_app" "preview" {
+  agent_id     = coder_agent.main.id
+  slug         = "preview"
+  display_name = "Preview"
+  icon         = "${data.coder_workspace.me.access_url}/icon/code.svg"
+  subdomain    = true
+  url          = "http://localhost:${var.preview_port}"
+  open_in      = "tab"
+
+  healthcheck {
+    url       = "http://localhost:${var.preview_port}"
+    interval  = 5
+    threshold = 6
   }
 }
