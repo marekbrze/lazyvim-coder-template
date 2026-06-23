@@ -75,8 +75,14 @@ resource "coder_agent" "main" {
 }
 
 # Docker Image
-data "docker_image" "main" {
-  name = var.docker_image
+# Use a resource (not a data source) so the image is pulled when missing from
+# the local Docker cache. `data.docker_image` only reads the cache and never
+# pulls, which causes "did not find docker image" errors after the image gets
+# pruned from the host. `keep_locally` prevents the shared base image from being
+# removed when a workspace is destroyed.
+resource "docker_image" "main" {
+  name         = var.docker_image
+  keep_locally = true
 }
 
 # Docker Volume for home directory
@@ -87,7 +93,7 @@ resource "docker_volume" "home" {
 # Docker Container
 resource "docker_container" "workspace" {
   count = data.coder_workspace.me.start_count
-  image = data.docker_image.main.name
+  image = docker_image.main.image_id
   name  = "coder-${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}"
 
   command = ["sh", "-c", replace(coder_agent.main.init_script, "/etc/skel", "/home/coder")]
