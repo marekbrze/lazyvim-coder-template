@@ -124,7 +124,7 @@ module "claude-code" {
   source   = "registry.coder.com/coder/claude-code/coder"
   version  = "5.2.0"
   agent_id = coder_agent.main.id
-  workdir  = "/home/coder/projects"
+  workdir  = "/home/coder"
   model    = "sonnet"
 
   # Install Terraform debugging skill
@@ -158,15 +158,18 @@ module "code-server" {
   source   = "registry.coder.com/coder/code-server/coder"
   version  = "1.4.3"
   agent_id = coder_agent.main.id
-  folder   = "/home/coder/projects"
+  folder   = "/home/coder"
   extensions = [
     "golang.go",
     "dbaeumer.vscode-eslint",
     "esbenp.prettier-vscode",
     "hashicorp.terraform",
+    "Catppuccin.catppuccin-vsc",
+    "Catppuccin.catppuccin-vsc-icons",
   ]
   settings = {
-    "workbench.iconTheme"     = "vs-seti"
+    "workbench.colorTheme"    = "Catppuccin Macchiato"
+    "workbench.iconTheme"     = "catppuccin-macchiato"
     "editor.formatOnSave"     = true
     "editor.defaultFormatter" = "esbenp.prettier-vscode"
     "go.useLanguageServer"    = true

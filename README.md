@@ -235,7 +235,6 @@ Adjust `container_memory` parameter based on your needs:
 │   ├── bin/            # Local binaries (mise, tools)
 │   └── share/          # Local shared files
 ├── .claude/            # Claude Code settings and skills
-├── projects/           # Your project directory
 └── .gitconfig          # Git configuration
 ```
 
