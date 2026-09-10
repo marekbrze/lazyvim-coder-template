@@ -71,6 +71,30 @@ A complete development environment for Go and Node.js projects with:
 2. Wait for installation (~3-5 minutes)
 3. Open terminal and start coding!
 
+### What Survives a Restart
+`/home/coder` is a persistent Docker volume; the container itself is recreated
+on every start. The startup script installs everything into `$HOME` and skips
+steps that are already done, so restarts are fast and keep your changes:
+
+- **LazyExtras** - stored in `~/.config/nvim/lazyvim.json`, never overwritten
+- **Neovim config** - `~/.config/nvim` is only cloned on the first start
+- **mise tools** - `~/.config/mise/config.toml` is only created on the first start;
+  tools added with `mise use -g ...` stay installed
+- **Neovim, lazygit, ripgrep, fd, gh, Node.js, Go, LSPs** - live in `~/.local`
+
+Anything installed outside `$HOME` (e.g. `sudo apt-get install ...`) is lost when
+the container is recreated. Prefer `mise use -g <tool>`, or put the commands in
+an executable `~/.config/coder/startup.sh` - it runs at the end of every start:
+
+```bash
+mkdir -p ~/.config/coder
+cat > ~/.config/coder/startup.sh <<'EOF'
+#!/bin/bash
+sudo apt-get install -y htop
+EOF
+chmod +x ~/.config/coder/startup.sh
+```
+
 ### LazyVim
 ```bash
 nvim                    # Start LazyVim
@@ -205,17 +229,21 @@ rust = "latest"
 ```
 
 ### Enable More LazyVim Extras
-Add to `~/.config/nvim/init.lua` block in `scripts/setup.tftpl`:
-```lua
-require("lazyvim.plugins.extras.lang.python")
-require("lazyvim.plugins.extras.lang.rust")
-require("lazyvim.plugins.extras.formatting.prettier")
-```
-
-Or enable interactively in nvim:
+Enable interactively in nvim - the choice is saved in `~/.config/nvim/lazyvim.json`
+and survives workspace restarts:
 ```vim
 :LazyExtras
 # Navigate to desired extra and press 'x' to enable
+```
+
+To change the default extras for new workspaces, edit the `lazyvim.json` block
+in `scripts/setup.tftpl`:
+```json
+"extras": [
+  "lazyvim.plugins.extras.lang.go",
+  "lazyvim.plugins.extras.lang.typescript",
+  "lazyvim.plugins.extras.lang.python"
+],
 ```
 
 ### Resource Limits
@@ -229,11 +257,13 @@ Adjust `container_memory` parameter based on your needs:
 ```
 /home/coder/
 ├── .config/
-│   ├── nvim/           # LazyVim configuration
-│   └── mise/           # mise configuration
+│   ├── nvim/           # LazyVim configuration (lazyvim.json = enabled extras)
+│   ├── mise/           # mise configuration
+│   └── coder/          # Optional startup.sh run on every start
 ├── .local/
-│   ├── bin/            # Local binaries (mise, tools)
-│   └── share/          # Local shared files
+│   ├── bin/            # Local binaries (mise, nvim, gopls)
+│   ├── opt/            # Neovim installation
+│   └── share/          # mise tools, nvim plugins, Mason packages
 ├── .claude/            # Claude Code settings and skills
 └── .gitconfig          # Git configuration
 ```
@@ -252,9 +282,11 @@ source ~/.bashrc
 # Check Neovim version
 nvim --version  # Should be 0.9+
 
-# Reinstall LazyVim
+# Reinstall LazyVim (the next workspace start clones a fresh starter)
 rm -rf ~/.config/nvim
-git clone https://github.com/LazyVim/starter ~/.config/nvim
+
+# Upgrade Neovim (reinstalled with the latest release on the next start)
+rm -rf ~/.local/opt/nvim-linux-*
 ```
 
 ### Language servers not working

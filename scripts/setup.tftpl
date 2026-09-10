@@ -1,14 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# /home/coder is a persistent Docker volume, but the container itself is
+# recreated on every workspace start. Everything is installed into $HOME and
+# each step is skipped when already done, so user changes (LazyExtras, nvim
+# config, mise tools) survive restarts.
+
 export PATH="$HOME/.local/bin:$PATH"
+mkdir -p "$HOME/.local/bin"
 
 echo "=== Setup start ==="
 
+# System packages (lost with the container, reinstalled only when missing)
+APT_PACKAGES="python3 python3-pip python3-venv gnupg gpg-agent dirmngr"
+MISSING_PACKAGES=""
+for pkg in $APT_PACKAGES; do
+  dpkg -s "$pkg" >/dev/null 2>&1 || MISSING_PACKAGES="$MISSING_PACKAGES $pkg"
+done
+if [ -n "$MISSING_PACKAGES" ]; then
+  echo "Installing system packages:$MISSING_PACKAGES"
+  sudo apt-get update
+  # shellcheck disable=SC2086
+  sudo apt-get install -y $MISSING_PACKAGES
+fi
+
 # mise
-echo "Installing mise..."
-curl -fsSL https://mise.jdx.dev/install.sh | sh
-eval "$(/home/coder/.local/bin/mise activate bash)"
+if [ ! -x "$HOME/.local/bin/mise" ]; then
+  echo "Installing mise..."
+  curl -fsSL https://mise.jdx.dev/install.sh | sh
+fi
+eval "$("$HOME/.local/bin/mise" activate bash)"
 
 # Persist mise + PATH for future shells
 grep -q 'mise activate' ~/.bashrc || cat >> ~/.bashrc <<'BASHRC'
@@ -16,74 +37,110 @@ export PATH="$HOME/.local/bin:$PATH"
 eval "$($HOME/.local/bin/mise activate bash)"
 BASHRC
 
-# Neovim 0.12+ for Linux x86_64
-echo "Installing Neovim..."
-curl -fsSL "https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz" \
-  -o /tmp/nvim.tar.gz
-sudo tar -xzf /tmp/nvim.tar.gz -C /opt/
-sudo ln -sf /opt/nvim-linux-x86_64/bin/nvim /usr/local/bin/nvim
-rm -f /tmp/nvim.tar.gz
+# Neovim 0.12+ (delete ~/.local/opt/nvim-linux-* to upgrade)
+case "$(uname -m)" in
+  aarch64 | arm64) NVIM_PKG="nvim-linux-arm64" ;;
+  *) NVIM_PKG="nvim-linux-x86_64" ;;
+esac
+NVIM_DIR="$HOME/.local/opt/$NVIM_PKG"
+if [ ! -x "$NVIM_DIR/bin/nvim" ]; then
+  echo "Installing Neovim..."
+  mkdir -p "$HOME/.local/opt"
+  curl -fsSL "https://github.com/neovim/neovim/releases/latest/download/$NVIM_PKG.tar.gz" \
+    -o /tmp/nvim.tar.gz
+  tar -xzf /tmp/nvim.tar.gz -C "$HOME/.local/opt"
+  rm -f /tmp/nvim.tar.gz
+fi
+ln -sf "$NVIM_DIR/bin/nvim" "$HOME/.local/bin/nvim"
+sudo ln -sf "$NVIM_DIR/bin/nvim" /usr/local/bin/nvim
 
-# LazyVim starter
-echo "Installing LazyVim..."
-rm -rf ~/.config/nvim
-git clone https://github.com/LazyVim/starter ~/.config/nvim
+# LazyVim starter - only on first start, never overwrite the user's config
+NVIM_CONFIG="$HOME/.config/nvim"
+if [ ! -d "$NVIM_CONFIG" ]; then
+  echo "Installing LazyVim..."
+  git clone https://github.com/LazyVim/starter "$NVIM_CONFIG"
+  rm -rf "$NVIM_CONFIG/.git"
+fi
 
-# Enable Go and TypeScript extras
-cat >> ~/.config/nvim/init.lua <<'LV'
-require("lazyvim.plugins.extras.lang.go")
-require("lazyvim.plugins.extras.lang.typescript")
-LV
+# Default extras (Go, TypeScript). lazyvim.json is where :LazyExtras stores
+# its state, so it is only seeded once and then left to the user.
+if [ ! -f "$NVIM_CONFIG/lazyvim.json" ]; then
+  cat > "$NVIM_CONFIG/lazyvim.json" <<'LVJSON'
+{
+  "extras": [
+    "lazyvim.plugins.extras.lang.go",
+    "lazyvim.plugins.extras.lang.typescript"
+  ],
+  "install_version": 8,
+  "version": 8
+}
+LVJSON
+fi
 
-# LazyVim dependencies
-echo "Installing LazyVim dependencies..."
-sudo apt-get update
-sudo apt-get install -y ripgrep fd-find python3 python3-pip python3-venv gnupg gpg-agent dirmngr
-ln -sf /usr/bin/fdfind ~/.local/bin/fd
+# Older versions of this template appended require() lines for the Go and
+# TypeScript extras to init.lua, which never actually enabled them. Migrate
+# once: drop the lines and add the extras to the existing lazyvim.json.
+LEGACY_EXTRAS='^require("lazyvim\.plugins\.extras\.lang\.\(go\|typescript\)")$'
+if grep -q "$LEGACY_EXTRAS" "$NVIM_CONFIG/init.lua"; then
+  echo "Migrating Go/TypeScript extras to lazyvim.json..."
+  sed -i "/$LEGACY_EXTRAS/d" "$NVIM_CONFIG/init.lua"
+  python3 - "$NVIM_CONFIG/lazyvim.json" <<'PY'
+import json, sys
 
-# lazygit via mise (not in Ubuntu apt)
-echo "Installing lazygit via mise..."
-mise use -g lazygit@latest
+path = sys.argv[1]
+with open(path) as f:
+    data = json.load(f)
+extras = data.setdefault("extras", [])
+for extra in ("lazyvim.plugins.extras.lang.go", "lazyvim.plugins.extras.lang.typescript"):
+    if extra not in extras:
+        extras.append(extra)
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+PY
+fi
 
-# GitHub CLI from official repo
-echo "Installing GitHub CLI..."
-command -v wget >/dev/null || sudo apt-get install -y wget
-sudo mkdir -p -m 755 /etc/apt/keyrings
-wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-  | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-  | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-sudo apt-get update
-sudo apt-get install -y gh
+# Remove fd symlink to apt's fdfind left by older versions of this template
+if [ "$(readlink "$HOME/.local/bin/fd" 2>/dev/null)" = "/usr/bin/fdfind" ]; then
+  rm -f "$HOME/.local/bin/fd"
+fi
 
-# Node and Go via mise
-echo "Installing Node.js and Go via mise..."
-mise use -g node@lts
-mise use -g go@latest
-
-# Language servers
-echo "Installing language servers..."
-mise exec -- go install golang.org/x/tools/gopls@latest
-mise exec -- npm install -g typescript typescript-language-server vscode-langservers-extracted
-
-# Global Claude skills (find-skills from vercel-labs)
-echo "Installing global Claude skills..."
-mise exec -- npx -y skills add https://github.com/vercel-labs/skills --skill find-skills --agent claude-code -g -y
-
-# mise config
-mkdir -p ~/.config/mise
-cat > ~/.config/mise/config.toml <<MISE
+# mise config - created once, then owned by the user (`mise use -g ...`)
+MISE_CONFIG="$HOME/.config/mise/config.toml"
+if [ ! -f "$MISE_CONFIG" ]; then
+  mkdir -p "$(dirname "$MISE_CONFIG")"
+  cat > "$MISE_CONFIG" <<MISE
 [tools]
-node = "lts"
-go = "latest"
-lazygit = "latest"
 
 [env]
 GOBIN = "$HOME/.local/bin"
 MISE
+fi
+
+# Tools via mise (installed in $HOME, so they persist). Only added when the
+# tool is not in the config yet - versions pinned by the user are kept.
+echo "Installing tools via mise..."
+for tool in node@lts go@latest lazygit@latest ripgrep@latest fd@latest github-cli@latest; do
+  grep -q "^$(echo "$tool" | cut -d@ -f1) = " "$MISE_CONFIG" || mise use -g "$tool"
+done
+mise install
+
+# Language servers
+if ! mise exec -- sh -c 'command -v gopls' >/dev/null; then
+  echo "Installing gopls..."
+  mise exec -- go install golang.org/x/tools/gopls@latest
+fi
+if ! mise exec -- sh -c 'command -v tsc && command -v typescript-language-server && command -v vscode-json-language-server' >/dev/null; then
+  echo "Installing TypeScript language servers..."
+  mise exec -- npm install -g typescript typescript-language-server vscode-langservers-extracted
+fi
+
+# Global Claude skills (find-skills from vercel-labs)
+if [ ! -e "$HOME/.claude/skills/find-skills" ]; then
+  echo "Installing global Claude skills..."
+  mise exec -- npx -y skills add https://github.com/vercel-labs/skills --skill find-skills --agent claude-code -g -y
+fi
 
 # Terraform debugging helper
-mkdir -p ~/.local/bin
 cat > ~/.local/bin/terraform-debug <<'TFD'
 #!/bin/bash
 export TF_LOG="$${TF_LOG:-INFO}"
@@ -92,6 +149,14 @@ echo "Terraform debugging enabled. Level: $TF_LOG, Log: $TF_LOG_PATH"
 terraform "$@"
 TFD
 chmod +x ~/.local/bin/terraform-debug
+
+# Personal hook for things installed outside $HOME (e.g. apt packages),
+# which are lost when the container is recreated
+USER_STARTUP="$HOME/.config/coder/startup.sh"
+if [ -x "$USER_STARTUP" ]; then
+  echo "Running $USER_STARTUP..."
+  "$USER_STARTUP" || echo "WARNING: $USER_STARTUP failed"
+fi
 
 echo ""
 echo "=========================================="

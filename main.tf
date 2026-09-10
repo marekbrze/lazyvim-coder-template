@@ -94,6 +94,11 @@ resource "docker_image" "main" {
 # Docker Volume for home directory
 resource "docker_volume" "home" {
   name = "coder-${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}-home"
+  # Protect the volume (and everything in /home/coder) from being deleted
+  # due to changes in attributes, e.g. renaming the workspace.
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # Docker Container
