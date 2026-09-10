@@ -21,10 +21,11 @@ jobs:
 
       - name: Create template ZIP
         run: |
-          zip lazyvim-coder-template-${{ steps.version.outputs.version }}.zip \
+          zip -r lazyvim-coder-template-${{ steps.version.outputs.version }}.zip \
             main.tf \
             README.md \
-            .mise.toml
+            .mise.toml \
+            scripts
 
       - name: Generate checksums
         run: sha256sum lazyvim-coder-template-${{ steps.version.outputs.version }}.zip > checksums.txt
@@ -52,6 +53,7 @@ jobs:
 
             ### Files
             - main.tf - Terraform configuration
+            - scripts/setup.tftpl - Workspace startup script
             - README.md - Documentation
             - .mise.toml - mise configuration
 
